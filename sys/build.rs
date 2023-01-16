@@ -8,6 +8,20 @@ const LIB_NAME: &str = "msdfgen";
 fn main() {
     use std::env;
 
+    // Patch for Caxton: force static linking when on Windows with MinGW,
+    // so Windows users don’t have to install MinGW
+    let is_msvc = env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc");
+    let is_windows = env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows");
+
+    if !is_msvc {
+        if is_windows {
+            println!("cargo:rustc-link-search=/usr/lib/gcc/x86_64-w64-mingw32/9.3-posix");
+            println!("cargo:rustc-link-lib=static=stdc++");
+        } else {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+        }
+    }
+
     #[cfg(any(not(feature = "bindgen"), feature = "update-bindings"))]
     fn bindings_filename() -> String {
         format!(
@@ -88,6 +102,10 @@ fn generate_bindings<P: AsRef<Path>>(
                 .map(|dir| format!("-I{}", dir.as_ref().display())),
         )
         .clang_arg("-DMSDFGEN_USE_CPP11")
+        // Workaround for issue when using cross to cross-compile for Windows.
+        // See <https://github.com/cross-rs/cross/issues/1147>
+        .clang_arg("-I/usr/lib/gcc/x86_64-w64-mingw32/9.3-win32/include/c++")
+        .clang_arg("-I/usr/lib/gcc/x86_64-w64-mingw32/9.3-posix/include/c++/x86_64-w64-mingw32")
         .header("msdfgen.h")
         .header(
             Path::new("src")
